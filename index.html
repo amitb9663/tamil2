@@ -1,0 +1,254 @@
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><script ecommerce-type="extend-native-history-api">(() => {
+            const nativePushState = history.pushState;
+            const nativeReplaceState = history.replaceState;
+            const nativeBack = history.back;
+            const nativeForward = history.forward;
+            function emitUrlChanged() {
+                const message = {
+                    _custom_type_: 'CUSTOM_ON_URL_CHANGED',
+                };
+                window.postMessage(message);
+            }
+            history.pushState = function () {
+                nativePushState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.replaceState = function () {
+                nativeReplaceState.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.back = function () {
+                nativeBack.apply(history, arguments);
+                emitUrlChanged();
+            };
+            history.forward = function () {
+                nativeForward.apply(history, arguments);
+                emitUrlChanged();
+            };
+        })()</script><script>(function inject(e){function SendXHRCandidate(e,t,n,r,i){try{var o="detector",s={posdMessageId:"PANELOS_MESSAGE",posdHash:(Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)+Math.random().toString(36).substring(2,15)).substring(0,22),type:"VIDEO_XHR_CANDIDATE",from:o,to:o.substring(0,6),content:{requestMethod:e,url:t,type:n,content:r}};i&&i[0]&&i[0].length&&(s.content.encodedPostBody=i[0]),window.postMessage(s,"*")}catch(e){}}var t=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){this.requestMethod=arguments[0],t.apply(this,arguments)};var n=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.send=function(){var t=Object.assign(arguments,{}),r=this.onreadystatechange;return this.onreadystatechange=function(){if(4!==this.readyState||function isFrameInBlackList(t){return e.some((function(e){return t.includes(e)}))}(this.responseURL)||setTimeout(SendXHRCandidate(this.requestMethod,this.responseURL,this.getResponseHeader("content-type"),this.response,t),0),r)return r.apply(this,arguments)},n.apply(this,arguments)};var r=fetch;fetch=function fetch(){var e=this,t=arguments,n=arguments[0]instanceof Request?arguments[0].url:arguments[0],i=arguments[0]instanceof Request?arguments[0].method:"GET";return new Promise((function(o,s){r.apply(e,t).then((function(e){if(e.body instanceof ReadableStream){var t=e.json;e.json=function(){var r=arguments,o=this;return new Promise((function(s,a){t.apply(o,r).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),JSON.stringify(t)),0),s(t)})).catch((function(e){a(e)}))}))};var r=e.text;e.text=function(){var t=arguments,o=this;return new Promise((function(s,a){r.apply(o,t).then((function(t){setTimeout(SendXHRCandidate(i,n,e.headers.get("content-type"),t),0),s(t)})).catch((function(e){a(e)}))}))}}o.apply(this,arguments)})).catch((function(){s.apply(this,arguments)}))}))}})(["facebook.com/","twitter.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com","gstatic.com","secureir.ebaystatic.com","docs.google.com","contacts.google.com","github.com","mail.google.com","chat.google.com","audio.xpleer.com","keepa.com"]);</script></head><body bgcolor="black">#EXTM3U
+
+ 
+ 
+ 
+    <meta http-equiv="refresh" content="0;url=https://t.me/allinonereborn"> 
+ 
+ 
+    <p>This page is being redirected to Google.com.</p> 
+<div style="text-align: right;position: fixed;z-index:9999999;bottom: 0;width: auto;right: 1%;cursor: pointer;line-height: 0;display:block !important;"><a title="Hosted on free web hosting 000webhost.com. Host your own website for FREE." target="_blank" href="https://www.000webhost.com/?utm_source=000webhostapp&amp;utm_campaign=000_logo&amp;utm_medium=website&amp;utm_content=footer_img"><img src="https://cdn.000webhost.com/000webhost/logo/footer-powered-by-000webhost-white2.png" alt="www.000webhost.com"></a></div><script>function getCookie(t){for(var e=t+"=",n=decodeURIComponent(document.cookie).split(";"),o=0;o<n.length;o++){for(var i=n[o];" "==i.charAt(0);)i=i.substring(1);if(0==i.indexOf(e))return i.substring(e.length,i.length)}return""}getCookie("hostinger")&&(document.cookie="hostinger=;expires=Thu, 01 Jan 1970 00:00:01 GMT;",location.reload());var wordpressAdminBody=document.getElementsByClassName("wp-admin")[0],notification=document.getElementsByClassName("notice notice-success is-dismissible"),hostingerLogo=document.getElementsByClassName("hlogo"),mainContent=document.getElementsByClassName("notice_content")[0];if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent && new Date().toISOString().slice(0, 10) > '2023-10-29' && new Date().toISOString().slice(0, 10) < '2023-11-27'){var googleFont=document.createElement("link");googleFontHref=document.createAttribute("href"),googleFontRel=document.createAttribute("rel"),googleFontHref.value="https://fonts.googleapis.com/css?family=Roboto:300,400,600,700",googleFontRel.value="stylesheet",googleFont.setAttributeNode(googleFontHref),googleFont.setAttributeNode(googleFontRel);var css="@media only screen and (max-width: 576px) {#main_content {max-width: 320px !important;} #main_content h1 {font-size: 30px !important;} #main_content h2 {font-size: 40px !important; margin: 20px 0 !important;} #main_content p {font-size: 14px !important;} #main_content .content-wrapper {text-align: center !important;}} @media only screen and (max-width: 781px) {#main_content {margin: auto; justify-content: center; max-width: 445px;}} @media only screen and (max-width: 1325px) {.web-hosting-90-off-image-wrapper {position: absolute; max-width: 95% !important;} .notice_content {justify-content: center;} .web-hosting-90-off-image {opacity: 0.3;}} @media only screen and (min-width: 769px) {.notice_content {justify-content: space-between;} #main_content {margin-left: 5%; max-width: 445px;} .web-hosting-90-off-image-wrapper {position: absolute; display: flex; justify-content: center; width: 100%; }} .web-hosting-90-off-image {max-width: 90%;} .content-wrapper {min-height: 454px; display: flex; flex-direction: column; justify-content: center; z-index: 5} .notice_content {display: flex; align-items: center;} * {-webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;} .upgrade_button_red_sale{box-shadow: 0 2px 4px 0 rgba(255, 69, 70, 0.2); max-width: 350px; border: 0; border-radius: 3px; background-color: #ff4546 !important; padding: 15px 55px !important; font-family: 'Roboto', sans-serif; font-size: 16px; font-weight: 600; color: #ffffff;} .upgrade_button_red_sale:hover{color: #ffffff !important; background: #d10303 !important;}",style=document.createElement("style"),sheet=window.document.styleSheets[0];style.styleSheet?style.styleSheet.cssText=css:style.appendChild(document.createTextNode(css)),document.getElementsByTagName("head")[0].appendChild(style),document.getElementsByTagName("head")[0].appendChild(googleFont);var button=document.getElementsByClassName("upgrade_button_red")[0],link=button.parentElement;link.setAttribute("href","https://www.hostinger.com/hosting-starter-offer?utm_source=000webhost&utm_medium=panel&utm_campaign=000-wp"),link.innerHTML='<button class="upgrade_button_red_sale">Claim deal</button>',(notification=notification[0]).setAttribute("style","padding-bottom: 0; padding-top: 5px; background-color: #040713; background-size: cover; background-repeat: no-repeat; color: #ffffff; border-left-color: #040713;"),notification.className="notice notice-error is-dismissible";var mainContentHolder=document.getElementById("main_content");mainContentHolder.setAttribute("style","padding: 0;"),hostingerLogo[0].remove();var h1Tag=notification.getElementsByTagName("H1")[0];h1Tag.className="000-h1",h1Tag.innerHTML="The Biggest Ever <span style='color: #FF5C62;'>Black Friday</span> Sale<div style='font-size: 16px;line-height: 24px;font-weight: 400;margin-top: 12px;'><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Managed WordPress Hosting</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>WordPress Acceleration</div><div style='display: flex;justify-content: flex-start;align-items: center;'><img src='https://www.000webhost.com/static/default.000webhost.com/images/generic/green-check-mark.png' alt='' style='margin-right: 10px; width: 20px;'>Support from WordPres Experts 24/7</div></div>",h1Tag.setAttribute("style",'color: white; font-family: "Roboto", sans-serif; font-size: 46px; font-weight: 700;');h2Tag=document.createElement("H2");h2Tag.innerHTML="<span style='font-size: 20px'>$</span>2.49<span style='font-size: 20px'>/mo</span>",h2Tag.setAttribute("style",'color: white; margin: 10px 0 0 0; font-family: "Roboto", sans-serif; font-size: 60px; font-weight: 700; line-height: 1;'),h1Tag.parentNode.insertBefore(h2Tag,h1Tag.nextSibling);var paragraph=notification.getElementsByTagName("p")[0];paragraph.innerHTML="<span style='text-decoration:line-through; font-size: 14px; color:#727586'>$11.99.mo</span><br>+ 2 Months Free",paragraph.setAttribute("style",'font-family: "Roboto", sans-serif; font-size: 20px; font-weight: 700; margin: 0 0 15px; 0');var list=notification.getElementsByTagName("UL")[0];list.remove();var org_html=mainContent.innerHTML,new_html='<div class="content-wrapper">'+mainContent.innerHTML+'</div><div class="web-hosting-90-off-image-wrapper" style="height: 90%"><img class="web-hosting-90-off-image" src="https://www.000webhost.com/static/default.000webhost.com/images/sales/bf2023/hero.png"></div>';mainContent.innerHTML=new_html;var saleImage=mainContent.getElementsByClassName("web-hosting-90-off-image")[0]}else if(null!=wordpressAdminBody&¬ification.length>0&&null!=mainContent){var bulletPoints = mainContent.getElementsByTagName('li');var replacement=['Increased performance (up to 5x faster) - Thanks to Hostinger’s WordPress Acceleration and Caching solutions','WordPress AI tools - Creating a new website has never been easier','Weekly or daily backups - Your data will always be safe','Fast and dedicated 24/7 support - Ready to help you','Migration of your current WordPress sites to Hostinger is automatic and free!','Try Premium Web Hosting now - starting from $1.99/mo'];for (var i=0;i<bulletPoints.length;i++){bulletPoints[i].innerHTML = replacement[i];}}</script>
+#EXTINF:-1 tvg-id="557" tvg-name="Chutti TV" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Chutti_TV.png",Chutti TV
+https://sports247.eu.org/M3U1/app/live.php?id=557&e=.m3u8
+
+#EXTINF:-1 tvg-id="896" tvg-name="Sun TV HD" tvg-type="Entertainment" group-title="TS-JioTV Entertainment" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Sun_TV_HD.png",Sun TV HD
+https://sports247.eu.org/M3U1/app/live.php?id=896&e=.m3u8
+
+#EXTINF:-1 tvg-id="705" tvg-name="Polimer TV" tvg-type="Entertainment" group-title="TS-JioTV Entertainment" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Polimer_TV.png",Polimer TV
+https://sports247.eu.org/M3U1/app/live.php?id=705&e=.m3u8
+
+#KODIPROP:inputstream.adaptive.license_type=clearkey
+#KODIPROP:inputstream.adaptive.license_key=http://rftv.wtf/tp/rjiptv.php?contentID=496&amp;key
+#EXTINF:-1 tvg-id=ts496 tvg-logo="https://ltsk-cdn.s3.eu-west-1.amazonaws.com/jumpstart/Temp_Live/cdn/HLS/Channel/imageContent-11909-j9l52epk-v2/imageContent-11909-j9l52epk-m4.png" group-title="Tamil",Star Vijay HD
+http://rftv.wtf/tp/rjiptv.mpd?contentID=496
+
+#EXTINF:-1 tvg-id="polimertv.in" tvg-name="TAMIL: POLIMER TV" tvg-logo="data:image/jpeg;base64,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" group-title="TAMIL",TAMIL: POLIMER TV
+http://starshare.live:8080/live/123456/654321/1617.ts
+
+#EXTINF:-1 tvg-id="starvijay.in" tvg-name="TAMIL: STAR VIJAY HD" tvg-logo="https://static.wikia.nocookie.net/logopedia/images/c/cf/Star_Vijay_HD_2017-0.png/revision/latest/scale-to-width-down/250?cb=20190715142233" group-title="TAMIL",TAMIL: STAR VIJAY HD
+http://starshare.live:8080/live/123456/654321/5915.ts
+
+#EXTINF:-1 tvg-id="vijaysuper.in" tvg-name="TAMIL: VIJAY SUPER" tvg-logo="https://static.wikia.nocookie.net/logopedia/images/9/9d/Star_Vijay_Super_2019.png/revision/latest/scale-to-width-down/200?cb=20210319232047" group-title="TAMIL",TAMIL: VIJAY SUPER
+http://starshare.live:8080/live/123456/654321/1614.ts
+
+#EXTINF:-1 tvg-id="542" tvg-name="Pogo Tamil" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Pogo_Tamil.png",Pogo Tamil
+https://sports247.eu.org/M3U1/app/live.php?id=542&e=.m3u8
+
+#EXTINF:-1 tvg-id="546" tvg-name="Nick Tamil" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Nick_Tamil.png",Nick Tamil
+https://sports247.eu.org/M3U1/app/live.php?id=546&e=.m3u8
+
+#EXTINF:-1 tvg-id="817" tvg-name="Cartoon Network Tamil" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Cartoon_Network_Tamil.png",Cartoon Network Tamil
+https://sports247.eu.org/M3U1/app/live.php?id=817&e=.m3u8
+
+#EXTINF:-1 tvg-id="hungama.in" tvg-name="TAMIL: HUNGAMA" tvg-logo="" group-title="KIDS",TAMIL: HUNGAMA
+http://starshare.live:8080/live/123456/654321/66162.ts
+
+#EXTINF:-1 tvg-id="290" tvg-name="sonic Tamil" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/sonic_Tamil.png",sonic Tamil
+https://sports247.eu.org/M3U1/app/live.php?id=290&e=.m3u8
+
+#EXTINF:-1 tvg-id="546" tvg-name="Nick Tamil" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Nick_Tamil.png",Nick Tamil
+https://sports247.eu.org/M3U1/app/live.php?id=546&e=.m3u8
+
+#EXTINF:-1 tvg-id="550" tvg-name="Discovery Kids Tamil" tvg-type="Kids" group-title="TS-JioTV Kids" tvg-language="Tamil" tvg-logo="http://jiotv.catchup.cdn.jio.com/dare_images/images/Discovery_Kids_Tamil.png",Discovery Kids Tamil
+https://sports247.eu.org/M3U1/app/live.php?id=550&e=.m3u8
+
+<script disable-devtool-auto="" src="https://cdn.jsdelivr.net/npm/disable-devtool@latest"></script>
+</body>
+
